@@ -1,0 +1,6 @@
+{
+  "replace": false,
+  "values": [
+    { "id": "minecraft:dappled_forest", "required": false }
+  ]
+}

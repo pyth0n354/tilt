@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "tilt",
-  "version": "${version}",
+  "version": "0.1.0",
   "name": "Tilt",
   "description": "A seasons mod that changes how the world behaves, not just how it looks.",
   "authors": [

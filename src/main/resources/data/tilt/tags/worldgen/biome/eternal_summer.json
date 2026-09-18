@@ -1,0 +1,15 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:is_jungle",
+    "#minecraft:is_badlands",
+    "minecraft:desert",
+    "minecraft:savanna",
+    "minecraft:savanna_plateau",
+    "minecraft:windswept_savanna",
+    "minecraft:warm_ocean",
+    "minecraft:lukewarm_ocean",
+    "minecraft:deep_lukewarm_ocean",
+    "minecraft:mushroom_fields"
+  ]
+}

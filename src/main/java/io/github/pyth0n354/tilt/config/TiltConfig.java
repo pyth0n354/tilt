@@ -56,6 +56,18 @@ public class TiltConfig {
     /** In-game days per season. Four seasons, so a year is four times this. */
     public int daysPerSeason = 24;
 
+    /** Season on day 0. Stored by name so the file stays readable and reorderable. */
+    public String startingSeason = "SPRING";
+
+    /** {@link #startingSeason} as an enum, falling back to spring if the file holds nonsense. */
+    public io.github.pyth0n354.tilt.Season startingSeason() {
+        try {
+            return io.github.pyth0n354.tilt.Season.valueOf(startingSeason.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return io.github.pyth0n354.tilt.Season.SPRING;
+        }
+    }
+
     // --- appearance ----------------------------------------------------------
 
     /** Recolour grass and foliage with the season. */
