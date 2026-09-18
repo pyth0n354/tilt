@@ -1,0 +1,177 @@
+package io.github.pyth0n354.tilt;
+
+import io.github.pyth0n354.tilt.config.SeasonPalette;
+import io.github.pyth0n354.tilt.config.TiltConfig;
+
+/**
+ * The four seasons, and how each recolours grass and foliage.
+ *
+ * <p>Each season blends the vanilla biome colour <em>toward</em> a target rather than replacing
+ * it. Blending preserves biome identity — a swamp in autumn still reads as a swamp — which a flat
+ * palette swap would erase.
+ *
+ * <p><b>Grass and foliage have separate targets.</b> Applying one tint to both produces
+ * yellow-olive ground plus yellow-olive leaves, which is precisely the savanna palette; the 0.0.1
+ * spike did exactly that and looked like savanna rather than autumn. Autumn needs straw-brown
+ * ground under orange leaves.
+ *
+ * <p>Autumn's targets are Mojang's own, taken from the Dappled Forest biome added in 26.3
+ * (grass {@code #df6827}, foliage {@code #e68e30}) — so autumn looks like the game's own autumn
+ * rather than an invented palette.
+ *
+ * <p>Winter additionally blends toward white, mirroring Bedrock Edition where "all biome-tinted
+ * leaves gradually fade to white once snowfall begins", in eight steps. Java has no equivalent.
+ */
+public enum Season {
+    SPRING, SUMMER, AUTUMN, WINTER;
+
+    /** Bedrock blends frost in eight discrete steps; matching that keeps the look familiar. */
+    public static final int FROST_STEPS = 8;
+
+    /** Live palette for this season, read from config so it can be tuned without a rebuild. */
+    private SeasonPalette palette() {
+        return TiltConfig.get().palette(ordinal());
+    }
+
+    public Season next() {
+        return values()[(ordinal() + 1) % values().length];
+    }
+
+    public float frost() {
+        return palette().frost;
+    }
+
+    /** Recolours a packed grass colour for this season. */
+    public int tintGrass(int packed) {
+        SeasonPalette p = palette();
+        return apply(packed, p.grassTarget, p.strength, p.frost);
+    }
+
+    /** Recolours a packed foliage (leaf) colour for this season. */
+    public int tintFoliage(int packed) {
+        SeasonPalette p = palette();
+        return apply(packed, p.foliageTarget, p.strength, p.frost);
+    }
+
+    /**
+     * Recolours dry foliage, which covers leaf litter and dead bushes. Frost is skipped: litter
+     * sits under the snow rather than catching it.
+     */
+    public int tintDryFoliage(int packed) {
+        SeasonPalette p = palette();
+        return apply(packed, p.dryFoliageTarget, p.strength, 0.0f);
+    }
+
+    /**
+     * Blends {@code packed} toward {@code target}, then applies frost.
+     *
+     * <p>The top 8 bits are preserved verbatim. Vanilla's biome colour methods return 0xRRGGBB
+     * with no alpha (Sodium ORs in {@code 0xFF000000} itself), but discarding those bits sets
+     * alpha to zero wherever they <em>are</em> populated, rendering the block fully transparent —
+     * observed as see-through leaves during the 0.0.1 spike.
+     */
+    private int apply(int packed, int target, float strength, float frost) {
+        if (strength <= 0.0f && frost <= 0.0f) {
+            return packed;
+        }
+        int high = packed & 0xFF000000;
+        int blended = strength > 0.0f ? hueBlend(packed, target, strength) : packed;
+
+        int red   = (blended >> 16) & 0xFF;
+        int green = (blended >> 8) & 0xFF;
+        int blue  = blended & 0xFF;
+
+        if (frost > 0.0f) {
+            // Quantise to Bedrock's eight steps so the fade reads stepped, not continuous.
+            float f = Math.round(Math.min(frost, 1.0f) * FROST_STEPS) / (float) FROST_STEPS;
+            red   = blend(red, 255, f);
+            green = blend(green, 255, f);
+            blue  = blend(blue, 255, f);
+        }
+        return high | (red << 16) | (green << 8) | blue;
+    }
+
+    /**
+     * Blends two colours through HSV, rotating hue the short way round.
+     *
+    /**
+     * Blends two colours through HSV, rotating hue the short way round.
+     *
+     * Interpolating green to orange channel by channel in RGB passes through a desaturated
+     * yellow. At half strength that produced almost exactly vanilla's desert foliage colour, so
+     * autumn forests rendered as though they were arid. Rotating the hue keeps saturation up and
+     * moves green to orange through the colours autumn actually passes through.
+     *
+     * Written without allocating. Sodium resolves block colours on chunk build threads, so an
+     * earlier version that returned float[] from a helper produced two array allocations per
+     * lookup, and enough GC churn to visibly stutter the game whenever a season was active.
+     */
+    private static int hueBlend(int from, int to, float t) {
+        float ar = ((from >> 16) & 0xFF) / 255.0f;
+        float ag = ((from >> 8) & 0xFF) / 255.0f;
+        float ab = (from & 0xFF) / 255.0f;
+        float amax = Math.max(ar, Math.max(ag, ab));
+        float ad = amax - Math.min(ar, Math.min(ag, ab));
+        float ah = hue(ar, ag, ab, amax, ad);
+        float as = amax == 0.0f ? 0.0f : ad / amax;
+
+        float br = ((to >> 16) & 0xFF) / 255.0f;
+        float bg = ((to >> 8) & 0xFF) / 255.0f;
+        float bb = (to & 0xFF) / 255.0f;
+        float bmax = Math.max(br, Math.max(bg, bb));
+        float bd = bmax - Math.min(br, Math.min(bg, bb));
+        float bh = hue(br, bg, bb, bmax, bd);
+        float bs = bmax == 0.0f ? 0.0f : bd / bmax;
+
+        float dh = bh - ah;
+        if (dh > 0.5f) {
+            dh -= 1.0f;
+        } else if (dh < -0.5f) {
+            dh += 1.0f;
+        }
+        return fromHsv((ah + dh * t + 1.0f) % 1.0f, as + (bs - as) * t, amax + (bmax - amax) * t);
+    }
+
+    private static float hue(float r, float g, float b, float max, float d) {
+        if (d <= 0.0f) {
+            return 0.0f;
+        }
+        float h;
+        if (max == r) {
+            h = ((g - b) / d) / 6.0f;
+        } else if (max == g) {
+            h = (2.0f + (b - r) / d) / 6.0f;
+        } else {
+            h = (4.0f + (r - g) / d) / 6.0f;
+        }
+        return h < 0.0f ? h + 1.0f : h;
+    }
+
+    private static int fromHsv(float h, float s, float v) {
+        int i = (int) Math.floor(h * 6.0f);
+        float f = h * 6.0f - i;
+        float p = v * (1.0f - s);
+        float q = v * (1.0f - f * s);
+        float t = v * (1.0f - (1.0f - f) * s);
+        float r, g, b;
+        switch (i % 6) {
+            case 0 -> { r = v; g = t; b = p; }
+            case 1 -> { r = q; g = v; b = p; }
+            case 2 -> { r = p; g = v; b = t; }
+            case 3 -> { r = p; g = q; b = v; }
+            case 4 -> { r = t; g = p; b = v; }
+            default -> { r = v; g = p; b = q; }
+        }
+        return (clamp(Math.round(r * 255)) << 16)
+             | (clamp(Math.round(g * 255)) << 8)
+             | clamp(Math.round(b * 255));
+    }
+
+    private static int blend(int from, int to, float amount) {
+        return clamp(Math.round(from + (to - from) * amount));
+    }
+
+    private static int clamp(int v) {
+        return v < 0 ? 0 : Math.min(v, 255);
+    }
+}

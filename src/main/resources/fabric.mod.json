@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "tilt",
+  "version": "${version}",
+  "name": "Tilt",
+  "description": "A seasons mod that changes how the world behaves, not just how it looks.",
+  "authors": [
+    "pyth0n354"
+  ],
+  "contact": {
+    "sources": "https://github.com/pyth0n354/tilt"
+  },
+  "license": "LGPL-3.0-or-later",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.pyth0n354.tilt.Tilt"
+    ],
+    "client": [
+      "io.github.pyth0n354.tilt.client.TiltClient"
+    ],
+    "modmenu": [
+      "io.github.pyth0n354.tilt.client.config.TiltModMenu"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "tilt.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=25",
+    "fabric-api": "*",
+    "yet_another_config_lib_v3": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}

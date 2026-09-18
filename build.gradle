@@ -1,0 +1,98 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+	maven { name = 'Modrinth'; url = 'https://api.modrinth.com/maven' }
+	maven { name = 'TerraformersMC'; url = 'https://maven.terraformersmc.com/' }
+}
+
+loom {
+	// Anything touching rendering, keybinds or Minecraft(client) MUST live in src/client,
+	// or a dedicated server crashes on load.
+	splitEnvironmentSourceSets()
+
+	mods {
+		"tilt" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	// Config screen. YACL is a hard dependency; Mod Menu is optional — the ModMenuApi
+	// entrypoint simply never loads when Mod Menu is absent, so the mod runs standalone.
+	implementation "maven.modrinth:yacl:${project.yacl_version}"
+	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+}
+
+processResources {
+	def props = [
+		version           : project.version,
+		minecraft_version : project.minecraft_version,
+		loader_version    : project.loader_version
+	]
+	inputs.properties(props)
+	filesMatching("fabric.mod.json") { expand(props) }
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+// --- Prism deployment -------------------------------------------------------
+// deployDev -> lean instance (Fabric API + this mod) to isolate Tilt's own behaviour
+// deploySodium -> instance with Sodium, to verify the colour hook survives it
+//
+// Loom 1.17 has no separate `remapJar` task — `jar` emits the already-remapped artifact.
+def jarTask = tasks.named('jar')
+def archivesName = project.archives_base_name
+def prismRoot = file("${System.getProperty('user.home')}/Library/Application Support/PrismLauncher/instances")
+
+def registerDeploy = { String taskName, String instanceName ->
+	def modsDir = new File(prismRoot, "${instanceName}/minecraft/mods")
+
+	tasks.register(taskName, Copy) {
+		group = 'tilt'
+		description = "Copy the built jar into the '${instanceName}' Prism instance."
+
+		from(jarTask.map { it.archiveFile })
+		into(modsDir)
+
+		doFirst {
+			if (!modsDir.isDirectory()) {
+				throw new GradleException("Prism instance mods dir not found: ${modsDir}\n" +
+					"Create a Minecraft ${project.minecraft_version} + Fabric instance named '${instanceName}' first.")
+			}
+			// Remove stale builds so Fabric doesn't load two copies.
+			modsDir.listFiles()?.each { f ->
+				if (f.name.startsWith("${archivesName}-") && f.name.endsWith('.jar')) {
+					f.delete()
+				}
+			}
+		}
+
+		doLast { logger.lifecycle("Deployed to ${instanceName}") }
+	}
+}
+
+registerDeploy('deployDev', 'Tilt Dev')
+registerDeploy('deploySodium', 'Tilt Sodium')

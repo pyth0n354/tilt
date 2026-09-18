@@ -669,3 +669,106 @@ Committing `docs/DESIGN.md` is therefore slightly unusual — but it is good pra
 the Matcha project already does, and for someone using open source as a **commissions portfolio**
 a visible design document demonstrating this level of research is an asset, not a liability.
 Recommend committing it.
+
+---
+
+## 13. ⚠️ Major revision — 26.x environment attributes change the architecture
+
+Researched 2026-09-18 against the 26.3 changelogs and the Loom jar. **This supersedes parts of
+§5 and §8.5.** Read it before writing any rendering code.
+
+### 13.1 Rendering has been rewritten three releases running
+
+| Version | Change |
+|---|---|
+| **26.1** | *"Changed the internals of how chunk geometry data is stored in GPU memory and how they are rendered."* Lightmap algorithm **fully rewritten**. Java 25, ZGC, 4 GB default heap. |
+| **26.2** | **OpenGL → Vulkan transition begins.** *"It is intended to switch the game from OpenGL to Vulkan."* Reversed depth buffer. Beds/signs become block models. |
+| **26.3** | `/posteffect` command — post-processing shaders become data-driven. |
+
+Confirmed in the jar: a new `com.mojang.renderpearl.*` GPU abstraction, and **`LevelRenderer.allChanged()` no longer exists** — the 26.3 equivalent is
+`invalidateCompiledGeometry(ClientLevel, Options, Camera, BlockColors)`.
+
+⚠️ **Every tutorial, and Fabric Seasons' own code, targets APIs that are gone.** Mixin-based
+rendering is materially more fragile than §8.5③ assumed — the pipeline is mid-rewrite and each
+release may break it.
+
+### 13.2 But most of the mod no longer needs mixins
+
+26.1 introduced **environment attributes**: data-driven values that *"control various visual and
+gameplay features depending on the dimension, biome, time, and weather."* Verified from
+`net.minecraft.world.attribute.EnvironmentAttributes` in the 26.3 jar.
+
+**Attributes that map directly onto Tilt's design:**
+
+| Attribute | Tilt use |
+|---|---|
+| **`BEES_STAY_IN_HIVE`** | §10.4 winter bee dormancy — *already a data-driven attribute* |
+| `NATURAL_MOB_SPAWNS`, `CREATURE_WORLD_GEN_SPAWN_PROBABILITY` | Seasonal spawning |
+| `VILLAGER_ACTIVITY`, `BABY_VILLAGER_ACTIVITY` | Seasonal villager behaviour |
+| `SNOW_GOLEM_MELTS`, `WATER_EVAPORATES`, `MONSTERS_BURN` | Seasonal world rules |
+| `SKY_COLOR`, `FOG_COLOR`, `SUNRISE_SUNSET_COLOR`, `CLOUD_COLOR` | Seasonal atmosphere |
+| `AMBIENT_LIGHT_COLOR`, `SKY_LIGHT_COLOR`, `SKY_LIGHT_FACTOR`, `BLOCK_LIGHT_TINT` | Winter's cold flat light, autumn's warm light |
+| `AMBIENT_SOUNDS`, `BACKGROUND_MUSIC`, `AMBIENT_PARTICLES` | Seasonal atmosphere, no new content |
+| `STAR_BRIGHTNESS`, `MOON_PHASE` | Longer, clearer winter nights |
+
+**And the layer system is exactly the machinery seasons need** — verified signatures:
+
+```java
+EnvironmentAttributeLayer$TimeBased   → applyTimeBased(Value, int)
+EnvironmentAttributeLayer$Positional  → applyPositional(Value, Vec3, SpatialAttributeInterpolator)
+EnvironmentAttributeLayer$Constant    → applyConstant(Value)
+```
+
+- **`TimeBased`** expresses the season cycle natively.
+- **`Positional`** expresses **hemispheres** (§10.2) natively — and because it takes a
+  `SpatialAttributeInterpolator`, the north/south transition is *smoothly interpolated* rather
+  than a hard boundary at z=0. That solves a problem the hemisphere design hadn't addressed.
+
+Attributes are datapack-definable, and *"dimension types and biome definitions can overwrite and
+modify environment attributes"* — which composes perfectly with the tag-based biome classes in §4.
+
+### 13.3 ❌ What attributes do NOT cover
+
+**Grass and foliage block colour is not in the attribute list.** Verified — the only colour
+attributes are fog, sky, cloud, sunrise/sunset, and the light tints. Block-level biome tinting
+still goes through `BiomeColors`, so **the foliage mixin is still required** and still carries the
+fragility in §13.1.
+
+Also still mixin work: crop seasonality, greenhouse checks, villager trade filtering.
+
+### 13.4 Revised architecture — two layers
+
+> **Data layer (safe, version-stable):** atmosphere, light, bees, spawns, sounds, villager
+> activity — environment attributes in a datapack.
+>
+> **Mixin layer (fragile, isolated):** foliage/grass tint, crops, greenhouses, trades.
+
+This is a **much better risk profile than §5 assumed**. If the rendering pipeline breaks the
+foliage mixin on some future release, the data layer keeps working and the mod still delivers
+seasonal atmosphere, bees, spawns and farming. The single point of failure is gone.
+
+### 13.5 Revised build order
+
+Supersedes §6. The safe layer now comes first and delivers visible value on its own.
+
+| Ver | Scope | Risk |
+|---|---|---|
+| **0.1** | Season maths + biome classes via tags; `/season` reports season at position | none |
+| **0.2** | **Environment attributes**: seasonal sky, fog, ambient light, `BEES_STAY_IN_HIVE` | low — pure data |
+| **0.3** | Crop seasonality + greenhouse rule | low — server-side |
+| **0.4** | Biome-typed villager trades | low — server-side |
+| **0.5** | ⚠️ Foliage/grass tint mixin + cache invalidation | **high** |
+| **0.6** | Hemispheres via `Positional` layers | medium |
+| **1.0** | Config, README, Modrinth page | — |
+
+**0.1–0.4 produce a genuinely useful mod with no rendering risk at all.** 0.5 becomes an
+enhancement rather than a dependency.
+
+### 13.6 Unverified — check before relying on it
+
+- Whether datapacks can register **new attribute layers**, or only assign and modify values. The
+  documented JSON shows value assignment and `modifier`/`argument` only. Registering a custom
+  `TimeBased` layer may need Java — small and stable code compared to rendering mixins, but
+  confirm before planning around it.
+- What the `int` in `applyTimeBased` actually is (day time? world time? tick?).
+- Whether `SpatialAttributeInterpolator` is usable from a datapack or code-only.
