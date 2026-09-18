@@ -206,8 +206,8 @@ writing mixins. Targets to confirm: the biome colour resolver, `CropBlock` rando
 
 Mirror the Matcha build: `splitEnvironmentSourceSets()`, Modrinth maven, and the `registerDeploy`
 Prism task pattern. **Loom 1.17 has no `remapJar`** — the plain `jar` task emits the remapped
-artifact. Per standing preference: **build and deploy only, never launch Minecraft** — the author
-relaunches their own instance to test.
+artifact. Per standing preference: **build and deploy only, never launch Minecraft.** The instance is
+relaunched by hand to test.
 
 ---
 
@@ -253,14 +253,14 @@ still ship as a legitimate mod.
 5. **Clean-room vs. reference.** Fabric Seasons is **MPL-2.0**, so reuse is legally permitted with
    attribution and per-file source disclosure. Recommend **clean-room** — avoids the obligation
    entirely and the codebase is 2 years stale anyway.
-6. **Repo/account.** Published under `pyth0n354`, kept separate from any personal account.
-   Decide before the first push; per-repo `user.email` needs setting to avoid cross-attribution.
+6. **Repo/account.** Settled: published under `pyth0n354`, with per-repo `user.email` set so
+   commits carry that identity.
 
 ---
 
 ## 8. Critical analysis — read before committing
 
-Written 2026-09-18 at request: maximally critical, still fair. Every claim below is
+Written 2026-09-18: maximally critical, still fair. Every claim below is
 checked against the data in `research/mod-opportunities.md`.
 
 ### 8.1 ⚠️ The thesis is weaker than §1 implies
@@ -321,7 +321,7 @@ annoy people in vanilla. Automatically spreading it in winter risks breaking bui
 **⑤ Multi-base play is an endgame behaviour.** The "settle in Cherry Grove for year-round spring
 crops" hook only lands for players who maintain several bases. Most players have one.
 
-**⑥ Beetroot as the winter crop is a dud.** *(correct.)* Beetroot is one of
+**⑥ Beetroot as the winter crop is a dud.** Beetroot is one of
 vanilla's weakest foods, so "snowy biomes gain a purpose" really means "gain the ability to farm
 the worst crop". The niche is technically new and practically worthless.
 → **Revision: make potato the winter-hardy crop.** Historically the cold-climate staple

@@ -54,6 +54,11 @@ processResources {
 }
 
 java {
+	// Resolve JDK 25 rather than depending on whatever `java` happens to be on PATH, so a fresh
+	// clone builds without editing gradle.properties.
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
 	withSourcesJar()
 	sourceCompatibility = JavaVersion.VERSION_25
 	targetCompatibility = JavaVersion.VERSION_25
