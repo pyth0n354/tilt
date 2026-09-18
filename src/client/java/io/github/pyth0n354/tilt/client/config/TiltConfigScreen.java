@@ -48,15 +48,6 @@ public final class TiltConfigScreen {
                                 .binding(true, () -> cfg.tintEnabled, v -> cfg.tintEnabled = v)
                                 .controller(TickBoxControllerBuilder::create)
                                 .build())
-                        .option(Option.<Boolean>createBuilder()
-                                .name(Component.literal("Tint spruce and birch"))
-                                .description(OptionDescription.of(Component.literal(
-                                        "Vanilla gives spruce and birch leaves fixed colours that ignore the biome. "
-                                        + "Turn this off to restore that, giving builders leaves that never change "
-                                        + "with the season — as cherry, azalea, pale oak and poplar always do.")))
-                                .binding(true, () -> cfg.tintFixedColourLeaves, v -> cfg.tintFixedColourLeaves = v)
-                                .controller(TickBoxControllerBuilder::create)
-                                .build())
                         .build())
                 .category(ConfigCategory.createBuilder()
                         .name(Component.literal("Advanced"))

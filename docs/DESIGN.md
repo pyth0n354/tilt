@@ -772,3 +772,67 @@ enhancement rather than a dependency.
   confirm before planning around it.
 - What the `int` in `applyTimeBased` actually is (day time? world time? tick?).
 - Whether `SpatialAttributeInterpolator` is usable from a datapack or code-only.
+
+---
+
+## 14. Working notes from the 0.0.1 spike
+
+Findings from actually building and running it, kept because several contradict what section 5
+and section 13 assumed.
+
+### 14.1 What the spike proved
+
+- Tinting grass, foliage and dry foliage through `BiomeColors` works, and works under Sodium.
+  Sodium calls the same public statics (`getAverageGrassColor`, `getAverageFoliageColor`), so one
+  hook covers both renderers.
+- Hooking the public methods rather than the `ColorResolver` lambdas is the right call. Fabric
+  Seasons injected into `method_23791`, a synthetic lambda whose name moves whenever the class is
+  recompiled.
+- `LevelRenderer.allChanged()` no longer exists in 26.3. The replacement is
+  `invalidateCompiledGeometry(ClientLevel, Options, Camera, BlockColors)`, and calling it
+  standalone **drops chunk geometry without requeueing a rebuild**, leaving holes in the world.
+  F3+A is the correct way to force a reload by hand.
+
+### 14.2 Bugs found, and what caused them
+
+| Symptom | Cause |
+|---|---|
+| See-through leaves | `tint()` packed `(r<<16)\|(g<<8)\|b` and discarded the top 8 bits, zeroing alpha |
+| Autumn looked like desert | RGB channel interpolation green to orange passes through desaturated yellow. At 0.55 it landed on almost exactly vanilla's desert foliage colour. Fixed by blending through HSV and raising strength |
+| Autumn looked like savanna | One tint applied to both grass and leaves. Straw ground under straw leaves is savanna; straw ground under amber leaves is autumn |
+| New defaults never applied | Gson rebuilds nested objects through their no-arg constructor, so a field missing from an older config comes back as zero, not as the initializer value. Presents as a rendering bug. Fixed with a schema version that backs up and regenerates |
+| Transparent geometry degrading under Sodium | `BlockColorsMixin` returned a fresh wrapper object per call to `getTintSources`. Sodium keys caches on these identities, so they grew without bound. Confirmed by a Sodium-only run with 15 rapid chunk reloads showing no fault at all |
+
+### 14.3 Spruce and birch are still unsolved
+
+They use `BlockTintSources.constant(int)` with fixed values, `#619961` and `#80A755`, and are
+documented as not affected by biome. They do not resolve through `BiomeColors`, so the main hook
+cannot reach them.
+
+The first attempt wrapped what `BlockColors` returned. It never tinted them in any build, and it
+caused 14.2's last row. **Removed rather than repaired.** Any future attempt should replace the
+registered tint source once at startup instead of wrapping per call, so object identity stays
+stable.
+
+`tintFixedColourLeaves` remains in the config, defaulting to false, as the switch for whatever
+replaces it.
+
+### 14.4 Colour decisions
+
+Autumn's leaf and litter targets are Mojang's own, from the Dappled Forest biome added in 26.3:
+foliage `#e68e30`, dry foliage `#8c3a04`.
+
+Autumn's grass deliberately does **not** use that biome's `#df6827`. Dappled Forest is permanently
+autumnal and stylised to match. Real grass dries to straw rather than turning orange, and blending
+toward `#df6827` at usable strength produced `#da8830`, which is unmistakably orange. Grass uses a
+straw target and shifts a shorter distance than leaves.
+
+### 14.5 To do
+
+- **Gradual transitions instead of F3+A.** Make the season a continuous value and rebuild a small
+  number of chunk sections per tick, rated by how much the colour actually changed rather than on
+  a fixed timer. Atmosphere via environment attributes needs no rebuilds at all and can be smooth
+  immediately. This is the open request Fabric Seasons never answered.
+- Replace the spruce and birch approach per 14.3.
+- Decide whether water, the fourth biome tinted resolver, should shift in winter.
+- Mod icon. Modrinth bans AI generated images, so it must be hand drawn.

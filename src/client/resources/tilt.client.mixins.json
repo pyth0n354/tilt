@@ -3,8 +3,7 @@
   "package": "io.github.pyth0n354.tilt.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "BiomeColorsMixin",
-    "BlockColorsMixin"
+    "BiomeColorsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

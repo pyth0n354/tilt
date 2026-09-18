@@ -77,14 +77,13 @@ public class TiltConfig {
     public SeasonPalette winter = new SeasonPalette(0x9A9480, 0x9AA89A, 0x6B5236, 0.50f, 0.45f);
 
     /**
-     * Include spruce and birch in the seasonal tint.
-     *
-     * <p>Vanilla gives these two fixed colours (#619961 and #80a755) that ignore biome entirely,
-     * so they need a separate hook. Turning this off restores that vanilla behaviour and gives
-     * builders leaves that never change — alongside cherry, azalea, pale oak and poplar, which are
-     * never tinted because their colour lives in the texture.
+     * Reserved. Spruce and birch carry fixed colours from BlockTintSources.constant(int) rather
+     * than resolving through BiomeColors, so they need a different hook than the other leaves.
+     * The first attempt wrapped the sources returned by BlockColors and was removed: it never
+     * actually tinted them, and returning a fresh wrapper per call defeated Sodium's identity
+     * keyed caches, which degraded transparent geometry the longer a season stayed active.
      */
-    public boolean tintFixedColourLeaves = true;
+    public boolean tintFixedColourLeaves = false;
 
     // --- load / save ---------------------------------------------------------
 
