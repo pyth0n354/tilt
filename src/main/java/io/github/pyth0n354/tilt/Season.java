@@ -25,6 +25,28 @@ import io.github.pyth0n354.tilt.config.TiltConfig;
 public enum Season {
     SPRING, SUMMER, AUTUMN, WINTER;
 
+    /**
+     * Per thread memo of recent blends, as interleaved key and value pairs.
+     *
+     * The blend runs once per block colour lookup, outside Sodium's own colour cache, and Sodium
+     * resolves colours on its chunk build threads. On a machine with few worker threads the HSV
+     * conversion was enough to make mesh builds fall behind whenever the camera moved, and the
+     * transparent layer was what went missing. Adjacent blocks almost always share a colour, so a
+     * tiny direct mapped cache removes nearly all of the work.
+     *
+     * Thread local rather than shared, so there are no races and no synchronisation on the hot
+     * path. Cleared wholesale when the config changes.
+     */
+    private static final int MEMO_SLOTS = 256;
+    private static final ThreadLocal<int[]> MEMO =
+            ThreadLocal.withInitial(() -> new int[MEMO_SLOTS * 3]);
+    private static volatile int memoGeneration;
+
+    /** Invalidates every memo. Call when the palette changes. */
+    public static void clearCaches() {
+        memoGeneration++;
+    }
+
     /** Bedrock blends frost in eight discrete steps; matching that keeps the look familiar. */
     public static final int FROST_STEPS = 8;
 
@@ -43,14 +65,12 @@ public enum Season {
 
     /** Recolours a packed grass colour for this season. */
     public int tintGrass(int packed) {
-        SeasonPalette p = palette();
-        return apply(packed, p.grassTarget, p.strength, p.frost);
+        return memoised(packed, 0);
     }
 
     /** Recolours a packed foliage (leaf) colour for this season. */
     public int tintFoliage(int packed) {
-        SeasonPalette p = palette();
-        return apply(packed, p.foliageTarget, p.strength, p.frost);
+        return memoised(packed, 1);
     }
 
     /**
@@ -58,8 +78,7 @@ public enum Season {
      * sits under the snow rather than catching it.
      */
     public int tintDryFoliage(int packed) {
-        SeasonPalette p = palette();
-        return apply(packed, p.dryFoliageTarget, p.strength, 0.0f);
+        return memoised(packed, 2);
     }
 
     /**
@@ -70,6 +89,34 @@ public enum Season {
      * alpha to zero wherever they <em>are</em> populated, rendering the block fully transparent —
      * observed as see-through leaves during the 0.0.1 spike.
      */
+    /**
+     * Looks the blend up in the per thread memo, computing it only on a miss.
+     *
+     * The slot holds a tag combining the season, which of the three colour paths this is, and the
+     * memo generation, so a stale entry can never be served after the palette changes.
+     */
+    private int memoised(int packed, int path) {
+        int tag = (ordinal() << 28) | (path << 26) | (memoGeneration & 0x03FFFFFF);
+        int[] memo = MEMO.get();
+        int slot = ((packed * 0x9E3779B1) >>> 24) * 3;
+
+        if (memo[slot] == packed && memo[slot + 1] == tag) {
+            return memo[slot + 2];
+        }
+
+        SeasonPalette p = palette();
+        int result = switch (path) {
+            case 1 -> apply(packed, p.foliageTarget, p.strength, p.frost);
+            case 2 -> apply(packed, p.dryFoliageTarget, p.strength, 0.0f);
+            default -> apply(packed, p.grassTarget, p.strength, p.frost);
+        };
+
+        memo[slot] = packed;
+        memo[slot + 1] = tag;
+        memo[slot + 2] = result;
+        return result;
+    }
+
     private int apply(int packed, int target, float strength, float frost) {
         if (strength <= 0.0f && frost <= 0.0f) {
             return packed;

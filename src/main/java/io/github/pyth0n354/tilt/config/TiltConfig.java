@@ -149,6 +149,7 @@ public class TiltConfig {
     }
 
     public void save() {
+        io.github.pyth0n354.tilt.Season.clearCaches();
         try {
             Files.createDirectories(PATH.getParent());
             Files.writeString(PATH, GSON.toJson(this));
