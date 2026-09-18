@@ -827,7 +827,27 @@ autumnal and stylised to match. Real grass dries to straw rather than turning or
 toward `#df6827` at usable strength produced `#da8830`, which is unmistakably orange. Grass uses a
 straw target and shifts a shorter distance than leaves.
 
-### 14.5 To do
+### 14.5 Rendering corruption was Sodium, not Tilt
+
+Transparent geometry vanishing, grass block sides reverting, and distant chunk geometry appearing
+at nearby positions, all while the camera moved, was
+[sodium#3915](https://github.com/CaffeineMC/sodium/issues/3915): Sodium 0.9.2+mc26.3 on the
+**OpenGL** backend with an Intel iGPU. Switching Minecraft to the **Vulkan** backend resolves it
+and improves framerate.
+
+It looked like Tilt's fault because it only appeared with a season active. Untinted geometry is
+conspicuous when everything around it is amber; in vanilla colours the same artifacts read as
+ordinary chunk pop-in.
+
+Three fixes were made while chasing it, on three wrong diagnoses. Two were worth keeping anyway:
+the HSV blend no longer allocates per lookup, and results are memoised per thread. The third,
+deleting `BlockColorsMixin`, was correct for an unrelated reason, namely that it never worked.
+
+**Lesson for testing:** a Sodium-only run that used rapid chunk reloads rather than sustained
+camera panning produced a false negative and sent the investigation the wrong way for several
+rounds. Reproduce the exact trigger, not an approximation of it.
+
+### 14.6 To do
 
 - **Gradual transitions instead of F3+A.** Make the season a continuous value and rebuild a small
   number of chunk sections per tick, rated by how much the colour actually changed rather than on
